@@ -21,6 +21,7 @@ NSString *const SDWebImageDownloadFinishNotification = @"SDWebImageDownloadFinis
 static NSString *const kProgressCallbackKey = @"progress";
 static NSString *const kCompletedCallbackKey = @"completed";
 
+//给 NSMutableDictionary 重新命名了一下
 typedef NSMutableDictionary<NSString *, id> SDCallbacksDictionary;
 
 @interface SDWebImageDownloaderOperation ()
@@ -39,6 +40,18 @@ typedef NSMutableDictionary<NSString *, id> SDCallbacksDictionary;
 
 @property (strong, nonatomic, readwrite, nullable) NSURLSessionTask *dataTask;
 
+/*
+ 要申明一个dispatch的属性。一般情况下我们只需要用strong即可。
+ 
+ @property (nonatomic, strong) dispatch_queue_t queue;
+ 如果你是写一个framework，framework的使用者的SDK有可能还是古董级的iOS6之前。那么你需要根据OS_OBJECT_USE_OBJC做一个判断是使用strong还是assign。（一般github上的优秀第三方库都会这么做）
+ 
+ #if OS_OBJECT_USE_OBJC
+ @property (nonatomic, strong) dispatch_queue_t queue;
+ #else
+ @property (nonatomic, assign) dispatch_queue_t queue;
+ #endif
+ */
 @property (SDDispatchQueueSetterSementics, nonatomic, nullable) dispatch_queue_t barrierQueue;
 
 #if SD_UIKIT
@@ -50,9 +63,9 @@ typedef NSMutableDictionary<NSString *, id> SDCallbacksDictionary;
 @implementation SDWebImageDownloaderOperation {
     size_t width, height;
 #if SD_UIKIT || SD_WATCH
-    UIImageOrientation orientation;
+    UIImageOrientation orientation;//负责图片的绘制方向
 #endif
-    BOOL responseFromCached;
+    BOOL responseFromCached;//用于设置是否需要缓存响应，默认为YES
 }
 
 @synthesize executing = _executing;
@@ -81,8 +94,23 @@ typedef NSMutableDictionary<NSString *, id> SDCallbacksDictionary;
 }
 
 - (void)dealloc {
+    //队列也需要释放。。。？
+    /*
+     原因就是  对于最低sdk版本>=ios6.0来说,GCD对象已经纳入了ARC的管理范围,我们就不需要再手工调用 dispatch_release了,否则的话,在sdk<6.0的时候,即使我们开启了ARC,这个宏OS_OBJECT_USE_OBJC 也是没有的,也就是说这个时候,GCD对象还必须得自己管理
+     
+     如果你部署的最低目标低于 iOS 6.0 or Mac OS X 10.8
+     你应该自己管理GCD对象,使用(dispatch_retain,dispatch_release),ARC并不会去管理它们
+     
+     如果你部署的最低目标是 iOS 6.0 or Mac OS X 10.8 或者更高的
+     ARC已经能够管理GCD对象了,这时候,GCD对象就如同普通的OC对象一样,不应该使用dispatch_retain ordispatch_release
+     */
     SDDispatchQueueRelease(_barrierQueue);
 }
+
+/*
+ 添加 进度条 和 处理完成的 回调方法  添加到了callbackBlocks字典数组中 NSMutableArray<SDCallbacksDictionary *>
+ 内部 使用了 dispatch_barrier_async 异步的栅栏 就是 添加的时候其他 队列中的人物是可以执行的
+ */
 
 - (nullable id)addHandlersForProgress:(nullable SDWebImageDownloaderProgressBlock)progressBlock
                             completed:(nullable SDWebImageDownloaderCompletedBlock)completedBlock {
@@ -95,6 +123,24 @@ typedef NSMutableDictionary<NSString *, id> SDCallbacksDictionary;
     return callbacks;
 }
 
+
+/**
+   返回以key 为键值 的 数组  剔除里面的[NSNull null]  异步队列里面 同步的方式执行查询
+ 
+ 
+ [self.callbackBlocks valueForKey:key]这段代码，self.callbackBlocks是一个数组，我们假定他的结构是这样的：
+ 
+ @[@{@"completed" : Block1},
+  @{@"progress" : Block2},
+  @{@"completed" : Block3},
+  @{@"progress" : Block4},
+  @{@"completed" : Block5},
+  @{@"progress" : Block6}]
+ 调用[self.callbackBlocks valueForKey:@"progress"]后会得到[Block2, Block4, Block6].
+ removeObjectIdenticalTo:这个方法会移除数组中指定相同地址的元素。
+ 
+
+ */
 - (nullable NSArray<id> *)callbacksForKey:(NSString *)key {
     __block NSMutableArray<id> *callbacks = nil;
     dispatch_sync(self.barrierQueue, ^{
@@ -105,6 +151,9 @@ typedef NSMutableDictionary<NSString *, id> SDCallbacksDictionary;
     return [callbacks copy];    // strip mutability here
 }
 
+/**
+  取消的回调 删除的时候  在异步队列里面执行栅栏同步方法 执行该block块中的方法时  其他的方法不允许执行 包括@synchronized 方法 在同步的时候也是不允许执行的 只有一条通道呀 但是dispatch_barrier_async 就不一样了 会和 synchronized 同时执行
+ */
 - (BOOL)cancel:(nullable id)token {
     __block BOOL shouldCancel = NO;
     dispatch_barrier_sync(self.barrierQueue, ^{
@@ -120,18 +169,22 @@ typedef NSMutableDictionary<NSString *, id> SDCallbacksDictionary;
 }
 
 - (void)start {
+    //如果取消了 那么就删除相应的数据
     @synchronized (self) {
         if (self.isCancelled) {
+            //取消了的话 那么久标记完成  使用了dispatch_barrier_sync，保证，必须该队列之前的任务都完成，且该取消任务结束后，在将其他的任务加入队列
             self.finished = YES;
             [self reset];
             return;
         }
 
+    //对后台任务的回收
 #if SD_UIKIT
         Class UIApplicationClass = NSClassFromString(@"UIApplication");
         BOOL hasApplication = UIApplicationClass && [UIApplicationClass respondsToSelector:@selector(sharedApplication)];
         if (hasApplication && [self shouldContinueWhenAppEntersBackground]) {
             __weak __typeof__ (self) wself = self;
+            //如果后台执行任务的时间到了的话 那么久清理当前的操作
             UIApplication * app = [UIApplicationClass performSelector:@selector(sharedApplication)];
             self.backgroundTaskId = [app beginBackgroundTaskWithExpirationHandler:^{
                 __strong __typeof (wself) sself = wself;
@@ -145,6 +198,7 @@ typedef NSMutableDictionary<NSString *, id> SDCallbacksDictionary;
             }];
         }
 #endif
+        //通过NSURLSession 创建 NSURLSessionTask 开启下载任务
         NSURLSession *session = self.unownedSession;
         if (!self.unownedSession) {
             NSURLSessionConfiguration *sessionConfig = [NSURLSessionConfiguration defaultSessionConfiguration];
@@ -216,12 +270,14 @@ typedef NSMutableDictionary<NSString *, id> SDCallbacksDictionary;
     [self reset];
 }
 
+//完成 函数
 - (void)done {
     self.finished = YES;
     self.executing = NO;
     [self reset];
 }
 
+//重置 当前的 operation状态
 - (void)reset {
     dispatch_barrier_async(self.barrierQueue, ^{
         [self.callbackBlocks removeAllObjects];
@@ -234,6 +290,7 @@ typedef NSMutableDictionary<NSString *, id> SDCallbacksDictionary;
     }
 }
 
+//手动kvo
 - (void)setFinished:(BOOL)finished {
     [self willChangeValueForKey:@"isFinished"];
     _finished = finished;
@@ -246,12 +303,14 @@ typedef NSMutableDictionary<NSString *, id> SDCallbacksDictionary;
     [self didChangeValueForKey:@"isExecuting"];
 }
 
+//是否是异步的请求
 - (BOOL)isConcurrent {
     return YES;
 }
 
 #pragma mark NSURLSessionDataDelegate
 
+//下载图片的请求收到回应了  通知都是在主线程中发通知
 - (void)URLSession:(NSURLSession *)session
           dataTask:(NSURLSessionDataTask *)dataTask
 didReceiveResponse:(NSURLResponse *)response
@@ -381,7 +440,7 @@ didReceiveResponse:(NSURLResponse *)response
         progressBlock(self.imageData.length, self.expectedSize, self.request.URL);
     }
 }
-
+//存储 CacheResponse
 - (void)URLSession:(NSURLSession *)session
           dataTask:(NSURLSessionDataTask *)dataTask
  willCacheResponse:(NSCachedURLResponse *)proposedResponse
@@ -455,7 +514,7 @@ didReceiveResponse:(NSURLResponse *)response
     }
     [self done];
 }
-
+//这个就是客户端验证
 - (void)URLSession:(NSURLSession *)session task:(NSURLSessionTask *)task didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge completionHandler:(void (^)(NSURLSessionAuthChallengeDisposition disposition, NSURLCredential *credential))completionHandler {
     
     NSURLSessionAuthChallengeDisposition disposition = NSURLSessionAuthChallengePerformDefaultHandling;
@@ -516,7 +575,7 @@ didReceiveResponse:(NSURLResponse *)response
 - (nullable UIImage *)scaledImageForKey:(nullable NSString *)key image:(nullable UIImage *)image {
     return SDScaledImageForKey(key, image);
 }
-
+///判断是不是应该在后台下载任务
 - (BOOL)shouldContinueWhenAppEntersBackground {
     return self.options & SDWebImageDownloaderContinueInBackground;
 }

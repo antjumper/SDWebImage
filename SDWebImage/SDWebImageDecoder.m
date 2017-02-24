@@ -24,13 +24,13 @@ static const size_t kBitsPerComponent = 8;
     // on iOS7, do not forget to call [[SDImageCache sharedImageCache] clearMemory];
     @autoreleasepool{
         
-        CGImageRef imageRef = image.CGImage;
-        CGColorSpaceRef colorspaceRef = [UIImage colorSpaceForImageRef:imageRef];
+        CGImageRef imageRef = image.CGImage;//可以拿到图像相关的各种参数
+        CGColorSpaceRef colorspaceRef = [UIImage colorSpaceForImageRef:imageRef];//颜色空间
         
-        size_t width = CGImageGetWidth(imageRef);
-        size_t height = CGImageGetHeight(imageRef);
-        size_t bytesPerRow = kBytesPerPixel * width;
-
+        size_t width = CGImageGetWidth(imageRef);//宽
+        size_t height = CGImageGetHeight(imageRef);//高
+        size_t bytesPerRow = kBytesPerPixel * width;//计算出每行的像素数
+         //创建没有透明因素的bitmap graphics contexts
         // kCGImageAlphaNone is not supported in CGBitmapContextCreate.
         // Since the original image here has no alpha info, use kCGImageAlphaNoneSkipLast
         // to create bitmap graphics contexts without alpha info.
@@ -44,7 +44,7 @@ static const size_t kBitsPerComponent = 8;
         if (context == NULL) {
             return image;
         }
-        
+        //绘制图像
         // Draw the image into the context and retrieve the new bitmap image without alpha
         CGContextDrawImage(context, CGRectMake(0, 0, width, height), imageRef);
         CGImageRef imageRefWithoutAlpha = CGBitmapContextCreateImage(context);
@@ -96,7 +96,7 @@ static const CGFloat kDestSeemOverlap = 2.0f;   // the numbers of pixels to over
     // autorelease the bitmap context and all vars to help system to free memory when there are memory warning.
     // on iOS7, do not forget to call [[SDImageCache sharedImageCache] clearMemory];
     @autoreleasepool {
-        CGImageRef sourceImageRef = image.CGImage;
+        CGImageRef sourceImageRef = image.CGImage;//可以拿到图像相关的各种参数
         
         CGSize sourceResolution = CGSizeZero;
         sourceResolution.width = CGImageGetWidth(sourceImageRef);
@@ -207,6 +207,11 @@ static const CGFloat kDestSeemOverlap = 2.0f;   // the numbers of pixels to over
     }
 }
 
+/**
+  image 为nil
+  animated images动图不适合
+  带有透明因素的图像不适合
+ */
 + (BOOL)shouldDecodeImage:(nullable UIImage *)image {
     // Prevent "CGBitmapContextCreateImage: invalid context 0x0" error
     if (image == nil) {
@@ -218,7 +223,7 @@ static const CGFloat kDestSeemOverlap = 2.0f;   // the numbers of pixels to over
         return NO;
     }
     
-    CGImageRef imageRef = image.CGImage;
+    CGImageRef imageRef = image.CGImage;//可以拿到图像相关的各种参数
     
     CGImageAlphaInfo alpha = CGImageGetAlphaInfo(imageRef);
     BOOL anyAlpha = (alpha == kCGImageAlphaFirst ||

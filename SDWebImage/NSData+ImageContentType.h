@@ -7,6 +7,9 @@
  * file that was distributed with this source code.
  */
 
+/*
+  根据头文件获取图片格式的 NSData的一个分类   __deprecated_msg("Use `sd_contentTypeForImageData:`")这个方法标记淘汰
+ */
 #import <Foundation/Foundation.h>
 #import "SDWebImageCompat.h"
 

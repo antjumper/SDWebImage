@@ -46,15 +46,16 @@ extern NSString * _Nonnull const SDWebImageDownloadFinishNotification;
 @property (strong, nonatomic, readonly, nullable) NSURLRequest *request;
 
 /**
- * The operation's task
+ * The operation's task  http://www.jianshu.com/p/fafc67475c73 
+ * NSURLSessionTask 有三个子类 NSURLSessionDataTask  NSURLSessionUploadTask NSURLSessionDownloadTask
  */
 @property (strong, nonatomic, readonly, nullable) NSURLSessionTask *dataTask;
 
-
+///SDWebImageDownloaderOperationInterface 对其中方法的实现 通过一个属性
 @property (assign, nonatomic) BOOL shouldDecompressImages;
 
 /**
- *  Was used to determine whether the URL connection should consult the credential storage for authenticating the connection.
+ *  Was used to determine whether the URL connection should consult（ [kənˈsʌlt] 询问） the credential storage for authenticating the connection.
  *  @deprecated Not used for a couple of versions
  */
 @property (nonatomic, assign) BOOL shouldUseCredentialStorage __deprecated_msg("Property deprecated. Does nothing. Kept only for backwards compatibility");
@@ -62,7 +63,8 @@ extern NSString * _Nonnull const SDWebImageDownloadFinishNotification;
 /**
  * The credential used for authentication challenges in `-connection:didReceiveAuthenticationChallenge:`.
  *
- * This will be overridden by any shared credentials that exist for the username or password of the request URL, if present.
+ * This will be overridden by any shared credentials that exist for the username or password of the request URL, if present. ///SDWebImageDownloaderOperationInterface 对其中方法的实现 通过一个属性
+
  */
 @property (nonatomic, strong, nullable) NSURLCredential *credential;
 
@@ -91,6 +93,8 @@ extern NSString * _Nonnull const SDWebImageDownloadFinishNotification;
  *  @param options        downloader options
  *
  *  @return the initialized instance
+ ///SDWebImageDownloaderOperationInterface 对其中方法的实现
+
  */
 - (nonnull instancetype)initWithRequest:(nullable NSURLRequest *)request
                               inSession:(nullable NSURLSession *)session
@@ -104,7 +108,7 @@ extern NSString * _Nonnull const SDWebImageDownloadFinishNotification;
  *                        @note the progress block is executed on a background queue
  *  @param completedBlock the block executed when the download is done.
  *                        @note the completed block is executed on the main queue for success. If errors are found, there is a chance the block will be executed on a background queue
- *
+ * ///SDWebImageDownloaderOperationInterface 对其中方法的实现
  *  @return the token to use to cancel this set of handlers
  */
 - (nullable id)addHandlersForProgress:(nullable SDWebImageDownloaderProgressBlock)progressBlock
