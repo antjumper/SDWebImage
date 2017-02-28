@@ -16,14 +16,14 @@
 
 /**
  *  Set the image load operation (storage in a UIView based dictionary)
- *
+ *  设置图像加载操作（存储在和UIView做绑定的字典里面）
  *  @param operation the operation
  *  @param key       key for storing the operation
  */
 - (void)sd_setImageLoadOperation:(nullable id)operation forKey:(nullable NSString *)key;
 
 /**
- *  Cancel all operations for the current UIView and key
+ *  Cancel all operations for the current UIView and key  用这个key找到当前UIView上面的所有操作并取消
  *
  *  @param key key for identifying the operations
  */

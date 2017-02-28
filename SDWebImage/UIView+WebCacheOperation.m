@@ -18,7 +18,14 @@ typedef NSMutableDictionary<NSString *, id> SDOperationsDictionary;
 
 @implementation UIView (WebCacheOperation)
 
+/*
+ 这个loadOperationKey 的定义是:static char loadOperationKey;
+ 它对应的绑定在UIView的属性是operationDictionary(NSMutableDictionary类型)
+ operationDictionary的value是操作,key是针对不同类型视图和不同类型的操作设定的字符串
+ 注意:&是一元运算符结果是右操作对象的地址(&loadOperationKey返回static char loadOperationKey的地址)
+ */
 - (SDOperationsDictionary *)operationDictionary {
+    ////如果可以查到operations,就rerun,反正给视图绑定一个新的,空的operations字典
     SDOperationsDictionary *operations = objc_getAssociatedObject(self, &loadOperationKey);
     if (operations) {
         return operations;
@@ -39,7 +46,7 @@ typedef NSMutableDictionary<NSString *, id> SDOperationsDictionary;
 }
 
 - (void)sd_cancelImageLoadOperationWithKey:(nullable NSString *)key {
-    // Cancel in progress downloader from queue
+    // Cancel in progress downloader from queue      // 取消正在下载的队列
     SDOperationsDictionary *operationDictionary = [self operationDictionary];
     id operations = operationDictionary[key];
     if (operations) {
